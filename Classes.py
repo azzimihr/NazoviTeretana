@@ -1,29 +1,31 @@
 from dataclasses import dataclass, asdict, fields, field
 import datetime as dt
 
-def save(dictum, cls):
-    objs = list(dictum.values())
-    with open(f"txt/{cls.lw()}.txt", "w", encoding='utf-8') as f:
-        for o in objs:
-            f.write("|".join(str(value) for value in asdict(o).values())+'\n')
+def rp(string):
+    return string.split('  |  ')[0].removeprefix("⭐ ")
+
+def dv(dictum):
+    return list(dictum.values())
 
 def handle(data, type, attr=None):
-    print(data)
-    if type == str:
-        if isinstance(data, list):
-            return ''.join(str(int(x.get())) for x in data)
-        else:
-            return str(data)
+    if attr == 'days':
+        return ''.join(str(int(x.get())) for x in data)
     if type == int:
         return int(data)
     if type == dt.date:
         return dt.datetime.strptime(data, "%Y-%m-%d").date()
     if type == dt.time:
         return dt.datetime.strptime(data, "%H:%M:%S").time()
+    return str(data)
+
+def save(dictum, cls):
+    with open(f"txt/{cls.lw()}.txt", "w", encoding='utf-8') as f:
+        for o in dv(dictum):
+            f.write("|".join(str(value) for value in dv(asdict(o)))+'\n')
 
 def load(cls):
     dicty = {}
-    with open(f"txt/{cls.lw()}.txt", "r") as f:
+    with open(f"txt/{cls.lw()}.txt", "r", encoding='utf-8') as f:
         for line in f.read().splitlines():
             ret = {}
             vals = line.split("|")
@@ -33,33 +35,46 @@ def load(cls):
             dicty[vals[0]] = a
     return dicty
 
+# def sessgen(d):
+#     for training in d.trainings:
+#         if not any(trainings.date == some_date and obj.code.startswith(some_string) for obj in my_dict.values())
 
-# Dict2 mi omogucava pristup vrednostima sintaksom d.kljuc umesto d['kljuc'], ali posto to overriduje .keys/values/itmes() metode, koristim ga samo na nekim mestima poput see() metode u klasama (jer pojednostavljuje ls() metode u svakoj klasi) kao i za sveoubhvatni dicts recnik, koji sadrzi persons, programs... recnike.
+def decoy(dictum, key, d):
+    return dictum[key].rep(d) if key in dictum else key
+
 class Dict2(dict):
+# daje pristup vrednostima preko d.kljuc umesto d['kljuc']. posto to overriduje keys/values/items metode, koristim ga samo na nekim mestima poput see metode u klasama kao i za sveoubhvatni d recnik, koji sadrzi persons, programs itd
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
 class Initial:
-    def ls(self, var, e={}):   # ova metoda sluzi za izmenu podataka pre prikaza i
+    def ls(self, var, d={}):   # ova metoda sluzi za izmenu podataka pre prikaza i
         pass                   # overriduje se u pojedinim klasama koje to zahtevaju
 
-    def see(self, e={}):     # ova metoda vraca podatke spremne za prikaz u tabeli
+    def see(self, d={}):     # ova metoda vraca podatke spremne za prikaz u tabeli
         r = Dict2(vars(self))
-        self.ls(r, e)
-        return tuple(val for attr, val in dict(r).items() if attr!='deleted')
+        self.ls(r, d)
+        return tuple(str(val) for attr, val in dict(r).items() if attr!='deleted')
     
     @classmethod
-    def mod(cls, e={}):
+    def mod(cls, d={}):
         return {f.name: cls.names()[i] for i, f in enumerate(fields(cls)) if f.name!='deleted'}
 
-    def check(self, e={}):
+    def extra(self, d={}):
         return 0
+
+    def check(self, d={}):
+        if any(any(ch in str(getattr(self, f.name)) for ch in "-|@,()}{\\") for f in fields(self) if f.type != dt.date):
+            return 'Korišćen je neki od nedozvoljenih karaktera: |@,-()}{\\'
+        return self.extra(d)
     
     @classmethod
     def lw(cls):
-        return f"{cls.__name__.lower()}s"
+        return cls.__name__.lower()+"s"
 
+    def rep(self, d={}):
+        return getattr(self, fields(self)[0].name)
 @dataclass
 class Person(Initial):
     username: str = ""
@@ -73,22 +88,26 @@ class Person(Initial):
     date: dt.date = field(default_factory=dt.date.today)
 
     def bind():
-        return {"su" : "Administrator", "inst" : "Instruktor", 'reg' : "-"}
+        return {"su" : "Administrator", "inst" : "Instruktor", 'reg' : "Korisnik"}
 
     @classmethod
     def mod(cls, role=None):
         return {**({"role": "Uloga"} if role == 'su' else {}),
-            "active": "Aktiviran", 'vip': "VIP"}
+            "active": "Aktivan", 'vip': "VIP"}
 
     @staticmethod
     def names():
-        return "Korisničko ime", "Ime", "Prezime", "Uloga", "Aktiviran", "VIP", "Dan registracije"
+        return "Korisničko ime", "Ime", "Prezime", "Uloga", "Stanje", "VIP", "Registracija"
     
-    def ls(self, r, e):
+    def ls(self, r, d):
         del r.pw, r.salt
-        r.role = Person.bind()[r.role]
-        r.active = "Da" if r.active else "-"
-        r.vip = "Da" if r.vip else "-"
+        r.role = Person.bind()[self.role]
+        r.active = "Aktivan" if self.active else "Neaktivan"
+        r.vip = "VIP" if self.vip else "REG"
+        r.date = self.date.strftime("%d.%m.%Y.")
+
+    def rep(self, d={}):
+        return f'{self.username}  |  {self.fname} {self.lname}'
     
     deleted: int = 0
     
@@ -97,11 +116,14 @@ class Room(Initial):
     id: str = ""
     name: str = ""
     rows: int = 0
-    mark: str = "A"
+    marks: int = 1
 
     @staticmethod
     def names():
-        return "ID", "Ime", "Broj redova", "Oznaka"
+        return "ID", "Ime", "Broj redova", "Broj kolona"
+
+    def rep(self, d={}):
+        return f"{self.id}  |  [{self.rows}x{self.marks}] {self.name}"
 
     deleted: int = 0
 
@@ -118,12 +140,14 @@ class Program(Initial):
     def names():
         return "Ime", "Vrsta", "Trajanje", "Instruktor", "Opis", "VIP"
 
-    def ls(self, r, e):
-        r.len = str(r.len)+' min'
-        r.vip = "Da" if r.vip else "-"
-        coach = e.persons[r.coach]
-        r.coach = '@'+r.coach+(f' - {coach.fname} {coach.lname}' if r.coach in e.persons else '') 
-
+    def ls(self, r, d):
+        r.len = str(self.len)+'min'
+        r.vip = "VIP" if self.vip else "REG"
+        r.coach = decoy(d.persons, self.coach, d)
+    
+    def rep(self, d={}):
+        return ('⭐ ' if self.vip else '') +f"{self.name}  |  {self.type} {self.len}min, @{self.coach}"
+    
     deleted: int = 0
 
 @dataclass
@@ -135,22 +159,24 @@ class Training(Initial):
     program: str = ''
     days: str = "0000011"
 
-    def ls(self, r, e):
+    def ls(self, r, d):
         r.start = r.start.strftime("%H:%M")
         r.end = r.end.strftime("%H:%M")
-        days = "".join('✅' if m=="1" else '⚪' for m in self.days)
+        r.program = decoy(d.programs, r.program, d)
+        days = "".join('✅' if m=="1" else '⚪' for m in self.days)+' '
+        days += ', '.join(D for b,D in zip(self.days,["Ponedeljak","Utorak", "Sreda","Četvrtak","Petak","Subota","Nedelja"]) if b == "1")
+        r.room = decoy(d.rooms, r.room, d)
         r.days = days[:5]+"  "+days[5:]
 
     @staticmethod
     def names():
         return "ID", "Sala", "Početak", "Kraj", "Program", "Dani"
     
-    def tmrw(delta=1):
-        return dt.date.today() + dt.timedelta(days=delta)
-    
-    def check(self, e={}):
+    def extra(self, d={}):
+        if not (len(self.id)==4 and all(c.isdigit() for c in self.id)):
+            return "Šifra treninga moraju biti 4 cifre."
         if self.start > self.end:
-            return "Trening ne može preći u naredni dan"
+            return "Trening ne može preći u naredni dan."
         return 0
     
     deleted: int = 0
@@ -164,6 +190,13 @@ class Session(Initial):
     def names():
         return "ID", "Datum"
     
+    def ls(self, r, d):
+        r.train = f"{self.train}  |  {d.trainings[self.train[:4]].program}"
+        r.date = f'{self.date.strftime("%d.%m.%Y.")}  |  {["Ponedeljak","Utorak","Sreda","Četvrtak","Petak","Subota","Nedelja"][self.date.weekday()]}'
+
+    def rep(self, d={}):
+        return f"{self.train}  |  {self.date.strftime("%d.%m.%Y.")}  |  {d.trainings[self.train[:4]].program}"
+    
     deleted: int = 0
 
 @dataclass
@@ -173,10 +206,24 @@ class Reserve(Initial):
     session: str = '1234AA'
     row: int = 1
     mark: str = 'A'
-    date: dt.date = field(default_factory=dt.date.today)
+
+    @classmethod
+    def mod(cls, role=None):
+        return {"user": "Korisnik", 'session': "Termin", 'row':'Mesto'}
 
     @staticmethod
     def names():
-        return "ID", "Korisnik", "Termin", "Red", "Oznaka", "Datum"
+        return "ID", "Korisnik", "Termin", "Mesto"
+    
+    def ls(self, r, d):
+        del r.mark
+        r.session = d.sessions[self.session].rep(d)
+        r.user = d.persons[self.user].rep(d)
+        r.row = f'{self.row}{self.mark}  |  Sala {d.trainings[self.session[:4]].room}'
+
+    def extra(self, d={}):
+        if self.user=='':
+            return 'Korisnik nije izabran.'
+        return 0
     
     deleted: int = 0

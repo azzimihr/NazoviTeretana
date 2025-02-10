@@ -15,17 +15,15 @@ def login(name='', pasw=''):
     global persons, acc
     logwin = win("Prijava", 250, 335)
     acc = ''
-    pad=frame(logwin, 'top', expand=False, pad=[0,15])
-
+    pad= Frame(logwin, 'top', expand=False, pad=[0,15])
     un = box("Korisničko ime:", pad, name, fcs=True)
     pw = box("Lozinka:", pad, pasw, pw=True)
     
     def process(guest=False):
         global acc
         if guest:
-            result = messagebox.askyesno("Gost",
-            """Koristićete nalog gosta tokom ove sesije.
-Razne opcije će biti ograničene. Proslediti?""")
+            result = msg(logwin,
+            """Koristićete nalog gosta tokom ove sesije.\nRazne opcije će biti ograničene. Nastaviti?""", yn=1)
             if result:
                 acc="Gost"
                 logwin.destroy()
@@ -39,25 +37,25 @@ Razne opcije će biti ograničene. Proslediti?""")
             acc=un.get()
             logwin.destroy()
 			
-    button(logwin, "ULOGUJ SE    >", process, 'Accent')
-    button(logwin, "REGISTRACIJA", lambda: (
+    Button(logwin, "ULOGUJ SE    >", process, 'Accent')
+    Button(logwin, "REGISTRACIJA", lambda: (
         logwin.destroy(), 
 		register(un.get(), pw.get())))
-    button(logwin, "REŽIM GOSTA ", lambda: process(True),)
+    Button(logwin, "REŽIM GOSTA ", lambda: process(True),)
     
-    logwin.bind('<Return>', lambda e: process())
+    logwin.bind('<Return>', lambda ev: process())
     logwin.mainloop()
 
 def register(name, pasw):
     regwin = win("Registracija", 500, 450)
 
-    left = frame(regwin, 'left', pad=[5,5])
+    left = Frame(regwin, 'left', pad=[5,5])
 
-    right = frame(regwin, 'right', '#111', wh=[280,420])
-    a2 = frame(right, 'bottom', '#4bf', 'x', False, [280, 200])
-    a1 = frame(right, 'top', '#111', 'x', False, [280,200])
-    # frame(right, 'top', '#111', 'both', False, [20,200])
-    text = tk.Label(right, fg="#bbb", bg='#333', text='Mi smo bezbedna kompanija.')
+    right = Frame(regwin, 'right', '#111', wh=[280,420])
+    a2 = Frame(right, 'bottom', '#4bf', 'x', False, [280, 200])
+    a1 = Frame(right, 'top', '#111', 'x', False, [280,200])
+    # Frame(right, 'top', '#111', 'both', False, [20,200])
+    text = Label(right, fg="#bbb", bg='#333', text='Mi smo bezbedna kompanija.')
     text.pack(side = 'top', ipady=300, fill='x')
 
     time = 60
@@ -68,7 +66,7 @@ def register(name, pasw):
             text.config(text=['Mi smo bezbedna kompanija.',"Definitivno vam ne krademo podatke.","Možete nam verovati."][quote%3])
             quote += 1
         time = (time+21)%84-20
-        a1.config(height=min(450, 270 - 130 * math.sin(0.075 * time)))
+        a1.config(height=min(450, 270-130 * math.sin(0.075 * time)))
         a2.config(height=max(0, 80 + 70 * math.sin(0.075 * time + 1.3)))
         a2.config(bg=f"#44{int(118 + 64 * math.sin(0.075 * time + math.pi/4)):02x}ff")
         anim = regwin.after(40, animate)
@@ -98,7 +96,7 @@ def register(name, pasw):
         elif not (len(pw1.get()) >= 6 and any(char.isdigit() for char in pw1.get())):
             msg(regwin, "Lozinka mora sadržati bar 6 karaktera i bar jednu cifru.")
 
-        elif '' in [un.get(), pw1.get(), pw2.get(), fn.get().strip(), ln.get().strip()]:
+        elif '' in {un.get(), pw1.get(), pw2.get(), fn.get().strip(), ln.get().strip()}:
             msg(regwin, "Sva polja moraju biti popunjena.")
 
         elif pw1.get() != pw2.get():
@@ -106,19 +104,21 @@ def register(name, pasw):
 
         else:
             salt = os.urandom(16).hex()
-            persons[un.get()] = Person(un.get(), encrypt(pw1.get()+salt), fn.get().strip(), ln.get().strip(), salt)
-            msg(regwin, "Uspešno ste se registrovali.")
-            save(persons, Person)
-            regwin.after_cancel(anim)
-            regwin.destroy()
-            login(un.get(), pw1.get())
+            obj = Person(un.get(), hashlib.sha256((pw1.get()+salt).encode('utf-8')).hexdigest(), fn.get().strip(), ln.get().strip(), salt)
+            if not obj.check():
+                persons[un.get()] = obj
+                save(persons, Person)
+                regwin.after_cancel(anim)
+                msg(regwin, "Uspešno ste se registrovali.")
+                regwin.destroy()
+                login(un.get(), pw1.get())
     
-    button(left, "REGISTRUJ SE >", process, 'Accent')
-    button(left, "PRIJAVA...", lambda: (
+    Button(left, "REGISTRUJ SE >", process, 'Accent')
+    Button(left, "PRIJAVA...", lambda: (
         regwin.after_cancel(anim),
         regwin.destroy(), 
         login(un.get(), pw1.get())
     ), '#331844')
-    regwin.bind('<Return>', lambda e: process())
+    regwin.bind('<Return>', lambda ev: process())
     right.config(bg='#333')
     regwin.mainloop()
