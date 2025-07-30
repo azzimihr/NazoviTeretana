@@ -14,11 +14,12 @@ def create(root, role, acc, d, cls, obj=False):
     win2.config(bg='#181818')
     win2.resizable(0,0)
     widgets = Dict2()
+    marker=False
 
     new = Frame(win2, pad=[5,5])
     scombo=1
     for i, attr in enumerate(attribs):
-        if attr not in {'end', 'row', 'id'}  or (attr=='id' and cls==Training):
+        if attr not in {'end', 'row', 'id'}  or (attr=='id' and cls in {Room, Training}):
             Label(new, full[attr] + ":", anchor="w").grid(row=i, column=0, padx=5, pady=12, sticky="w")
         if attr == 'days':
             Label(new, "", anchor="w").grid(row=i, column=1, padx=2, pady=5, sticky="w")
@@ -33,7 +34,7 @@ def create(root, role, acc, d, cls, obj=False):
 
         elif attr in {'vip', 'active'}:
             widgets[attr] = tk.BooleanVar(value=getattr(obj, attr) if obj else 0)
-            Style("bbbb.TCheckbutton", bg='#161686', pad=40, font=11)
+            Style("bbbb.TCheckbutton", bg='#161686', pad=0, font=11)
             ttk.Checkbutton(new, variable=widgets[attr], style = 'bbbb.TCheckbutton').grid(row=i, column=2, padx=5, pady=5, sticky="ew", columnspan=16)
         
         elif attr =="start":
@@ -51,6 +52,7 @@ def create(root, role, acc, d, cls, obj=False):
             widgets[attr] = (hour, minute)
         
         elif attr == 'row':
+            marker = True
             Label(new, "Red i oznaka:", anchor="w").grid(row=i, column=0, padx=5, pady=12, sticky="w")
             picked = Label(new, str(obj.row)+obj.mark if obj else "-", anchor="w")
             picked.grid(row=i, column=4, padx=5, pady=12, sticky="w")
@@ -68,6 +70,7 @@ def create(root, role, acc, d, cls, obj=False):
                     print(temp)
                     widgets.row = int(temp[:-1])
                     widgets.mark = temp[-1]
+                    print(widgets.mark)
                     picked['text']=temp
             ttk.Button(new, command=pick, text='Izaberi mesto...').grid(row=i, column=6, columnspan=16, padx=5, pady=5, ipady=6, sticky="w")
 
@@ -98,7 +101,7 @@ def create(root, role, acc, d, cls, obj=False):
 
             widgets[attr] = combo
 
-        elif attr not in {'end', 'mark', 'row', 'id'} or (attr=='id' and cls==Training):
+        elif attr not in {'end', 'mark', 'row', 'id'} or (attr=='id' and cls in {Room, Training}):
             var = ttk.Entry(new)
             var.grid(row=i, column=2, columnspan=15, padx=5, ipady=4, ipadx=2, pady=5, sticky="ew")
             if obj:
@@ -106,45 +109,51 @@ def create(root, role, acc, d, cls, obj=False):
             if i==0:
                 var.focus()
             widgets[attr] = var
+    if marker:
+        attribs.append('mark')
 
     def ok():
-        # try:
-        vals = Dict2({attr: handle(
-        f'{widgets['start'][0].get()}:{widgets['start'][1].get()}:00' if attr =="start" else
-        widgets[attr] if attr in {'days','mark','row'} else
-        rp(widgets[attr].get()) if attr in {'room', 'coach', 'user', 'program', 'session'} else
-        next(k for k, v in Person.bind().items() if v == widgets[attr].get()) if attr=='role' else
-        widgets[attr].get(),
-        cls.__annotations__.get(attr), attr) for attr in attribs})
-        if 'start' in vals:
-            vals.end = (dt.datetime.combine(dt.datetime.min,vals.start) + dt.timedelta(minutes=d.programs[vals.program].len)).time()
-        if 'row' in vals:
-            vals.id = ''.join(random.choices(string.digits, k=8))
-        if cls==Person:
-            for k, v in vals.items():
-                setattr(obj, k, v)
-            save(d.persons, Person)
-            win2.destroy()
-            return
-        a = cls(**vals)
-        err = a.check(d)
-        if cls==Reserve and any(obj.user==a.user and obj.session==a.session for obj in d.reserves.values()):
-            err = "Za ovog korisnika već postoji rezervacija za ovaj termin."
-        if dv(asdict(a))[0] in raw and ((not obj) or dv(asdict(a))[0] != dv(asdict(obj))[0]):
-            err = f"Uneti jedinstveni identifikator ({dv(full)[0]}) je zauzet."
-        if err:
-            del a
-            msg(win2, err, title='Greška')
-        else:
-            if obj:
-                del raw[dv(asdict(obj))[0]]   # brisanje starog objekta
-            raw[dv(asdict(a))[0]] = a      # ubacivanje novog objekta
-            save(d[cls.lw()], cls)
-            win2.destroy()
-            return
-        # except:
-        #     print(sys.exc_info()[1])
-        #     msg(win2, f"Podaci su neispravno formatirani!\n{print(sys.exc_info()[1])}", title='Greška')
+        try:
+            print(widgets)
+            vals = Dict2({attr: handle(
+            f'{widgets['start'][0].get()}:{widgets['start'][1].get()}:00' if attr =="start" else
+            widgets[attr] if attr in {'days','mark','row'} else
+            rp(widgets[attr].get()) if attr in {'room', 'coach', 'user', 'program', 'session'} else
+            next(k for k, v in Person.bind().items() if v == widgets[attr].get()) if attr=='role' else
+            widgets[attr].get(),
+            cls.__annotations__.get(attr), attr) for attr in attribs})
+            if 'start' in vals:
+                vals.end = (dt.datetime.combine(dt.datetime.min,vals.start) + dt.timedelta(minutes=d.programs[vals.program].len)).time()
+            if 'row' in vals:
+                vals.id = ''.join(random.choices(string.digits, k=8))
+            if cls==Person:
+                for k, v in vals.items():
+                    setattr(obj, k, v)
+                save(d.persons, Person)
+                win2.destroy()
+                return
+            a = cls(**vals)
+            err = a.check(d)
+            if cls==Reserve and obj:
+                a.id=obj.id
+            if cls==Reserve and any(o.user==a.user and o.session==a.session and o.id!=a.id for o in d.reserves.values()):
+                err = "Za korisnika već postoji rezervacija za ovaj termin."
+            if a.uid() in raw and ((not obj) or a.uid() != obj.uid()):
+                err = f"Uneti jedinstveni identifikator '{a.uid()}' je zauzet."
+            if err:
+                del a
+                msg(win2, err, title='Greška')
+            else:
+                if obj:
+                    del raw[a.uid()]   # brisanje starog objekta
+                raw[a.uid()] = a      # ubacivanje novog objekta
+                print(a)
+                save(d[cls.lw()], cls)
+                win2.destroy()
+                return
+        except:
+            print(sys.exc_info()[1])
+            msg(win2, f"Podaci su neispravno formatirani!", title='Greška')
 
     btn_frame = tk.Frame(new, bg='#161616')
     btn_frame.grid(row=len(attribs)+1, column=0, columnspan=17, pady=10, padx=5)

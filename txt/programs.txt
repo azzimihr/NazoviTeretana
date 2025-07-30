@@ -1,3 +1,3 @@
-Quickstart|cardio|12|kimi|bezveze jako|1|0
-potpuni srbin|body|126|kimi|kosovski boj 2076|0|0
-fgfdgf|cardio|40|gavran|srbin|1|0
+pushups|arm|35|laza|sklekovi|1|0
+sveobuhvatni preobrazaj|body|960|mika|sveobuhvatni preobrazaj|0|0
+traka|cardio|60|pera|trcanje|0|0

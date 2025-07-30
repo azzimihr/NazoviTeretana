@@ -1,3 +1,2 @@
-3|sopce|22|5|0
-26|fefefere|28|4|0
-2A|Fiskultura|11|8|0
+391|Fiskultura|11|8|0
+734|Teretana C|5|5|0

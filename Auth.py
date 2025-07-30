@@ -55,16 +55,10 @@ def register(name, pasw):
     a2 = Frame(right, 'bottom', '#4bf', 'x', False, [280, 200])
     a1 = Frame(right, 'top', '#111', 'x', False, [280,200])
     # Frame(right, 'top', '#111', 'both', False, [20,200])
-    text = Label(right, fg="#bbb", bg='#333', text='Mi smo bezbedna kompanija.')
-    text.pack(side = 'top', ipady=300, fill='x')
 
     time = 60
-    quote=0
     def animate():
-        nonlocal a1, a2, time, regwin, text, quote, anim
-        if (time+21)//84:
-            text.config(text=['Mi smo bezbedna kompanija.',"Definitivno vam ne krademo podatke.","Možete nam verovati."][quote%3])
-            quote += 1
+        nonlocal a1, a2, time, regwin, anim
         time = (time+21)%84-20
         a1.config(height=min(450, 270-130 * math.sin(0.075 * time)))
         a2.config(height=max(0, 80 + 70 * math.sin(0.075 * time + 1.3)))
@@ -81,10 +75,8 @@ def register(name, pasw):
 
     def process():
         global persons
-        if '|' in un.get()+fn.get()+ln.get():
-            msg(regwin, 'Karakter "|" nije dozvoljen.')
 
-        elif ' ' in un.get():
+        if ' ' in un.get():
             msg(regwin, "Korisničko ime ne može sadržati razmake.")
 
         elif un.get() in persons:
@@ -112,6 +104,10 @@ def register(name, pasw):
                 msg(regwin, "Uspešno ste se registrovali.")
                 regwin.destroy()
                 login(un.get(), pw1.get())
+            else:
+                msg(regwin, obj.check())
+                del obj
+
     
     Button(left, "REGISTRUJ SE >", process, 'Accent')
     Button(left, "PRIJAVA...", lambda: (

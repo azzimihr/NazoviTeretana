@@ -18,7 +18,7 @@ def gen(root, _cls, _role, _acc, _d):
         pass
 
     Style('Treeview.Heading', font=("TkDefaultFont", 9, "normal"), fg="#cde", anchor="w", h=2)
-    Style('Custom.Treeview', bg="#222", rh=34, fg='#ddd', font=("TkDefaultFont", 9, "normal"), anchor="center").map('Custom.Treeview', foreground=[('selected', '#000')], background=[('selected', '#5bf')])
+    Style('Custom.Treeview', bg="#222", rh=30, fg='#ddd', font=("TkDefaultFont", 9, "normal"), anchor="center").map('Custom.Treeview', foreground=[('selected', '#000')], background=[('selected', '#5bf')])
     
     def add():
         create(root, role, acc, d, cls)
@@ -30,12 +30,25 @@ def gen(root, _cls, _role, _acc, _d):
 
     def remove():
         k = selid()
-        if raw[k].deleted:
-            del raw[k]
+        if cls==Reserve:
+            ms = "Želite li trajno obrisati rezervaciju?"
+        elif not raw[k].deleted:
+            ms = "Ako izbrišete ovaj entitet, postaće nedostupan za dalju\nupotrebu, ali trenutne upotrebe će opstati.\n\n"
+            ms = ms + "Možete trajno obrisati "+raw[k].uid()+" tako što posle ponovite brisanje." if role=='su' else "Administratori imaju mogućnost pravog brisanja."
         else:
-            raw[k].deleted = 1
-        save(d[cls.lw()],cls)
-        redraw()
+            uses = raw[k].usage(d)
+            ms = "Želite li trajno obrisati entitet "+raw[k].uid()+"?\nBroj korišćenja u ostatku databaze je "+str(len(uses)-1)
+        if msg(root, ms, yn=1):
+            if raw[k].deleted:
+                for i in uses:
+                    del d[i.lw()][i.uid()]
+            elif cls==Reserve:
+                del raw[k]
+            else:
+                raw[k].deleted = 1
+            for c in {Person, Room, Program, Training, Session, Reserve}:
+                save(d[c.lw()],c)
+            redraw()
 
     def restore():
         raw[selid()].deleted = 0
@@ -53,7 +66,7 @@ def gen(root, _cls, _role, _acc, _d):
             if item:
                 tree.selection_set(item)
                 cxt("♻️   Vrati", restore, d[cls.lw()][selid()].deleted)
-                cxt("🖊  Izmeni...", edit, role=='su' or cls==Reserve or (cls==Person and role=='inst' and d.persons[selid()].role=='reg'))
+                cxt("🖊  Izmeni...", edit, role=='su' or (cls==Reserve and role=='inst') or (cls==Person and role=='inst' and d.persons[selid()].role=='reg'))
                 cxt("❌  Ukloni", remove, (role=='su' and cls!=Person) or cls==Reserve)
             menu.post(e.x_root, e.y_root)
             menu.grab_release()
@@ -65,14 +78,15 @@ def gen(root, _cls, _role, _acc, _d):
             tree.heading(i, text=i)
     def tg(tag, bg=None, **kwargs): tree.tag_configure(tag, background=bg, **kwargs)
     tg("e",  "#333")    # even
-    tg("o",  "#222")
-    tg("ge", "#162")   # 'gold' even
-    tg("go", "#115b22")
-    tg("sge","#207")   # 'semi gold' even
-    tg("sgo","#206")
-    tg("nge","#722")  # 'not gold' even
-    tg("ngo","#622")
-    tg('del',"#320", foreground='#a98', font=("TkDefaultFont", 9, "italic"))
+    tg("o",  "#222")    # odd
+    tg("ge", "#162")    # green even
+    tg("go", "#115b22") # green odd
+    tg("sge","#207")    # semi green even
+    tg("sgo","#206")    # semi green odd
+    tg("nge","#722")    # not green even
+    tg("ngo","#622")    # not green odd
+    tg('del',"#220", foreground='#a98', font=("TkDefaultFont", 9, "italic"))
+    tg('pst',"#412", foreground='#a89', font=("TkDefaultFont", 9, "italic"))
     tree.tag_configure('vip')
 
     def head(text): tree.heading(text, command=lambda e=None: color(e, text))
@@ -91,17 +105,22 @@ def gen(root, _cls, _role, _acc, _d):
 
     for col in tree['columns']:
         match col:
-            case 'Kraj'|'VIP'|'Stanje'|'Početak'|'Broj redova'|'Trajanje'|'Mesto'|'Datum'|'ID'|'Registracija'|'Oznaka'|'Dani': w=36
-            case 'Uloga': w=70
-            case _: w=380
+            case 'Kraj'|'VIP'|'Stanje'|'Početak'|'Broj redova'|'Broj kolona'|'Trajanje'|'Mesto'|'Datum'|'ID'|'Registracija'|'Oznaka'|'Dani': w=40
+            case 'Uloga': w=80
+            case _: w=350
         tree.column(col, width=w)
     return tree, scrollbar
+
+def get():
+    return tree
 
 def delvip():
     for row in tree.get_children():
         item = raw[selid(row)]
         if item.deleted:
             tree.item(row, tags=("del",))
+        elif (cls==Session and item.date<=dt.datetime.now().date()) or (cls==Reserve and d.sessions[item.session].date<=dt.datetime.now().date()):
+            tree.item(row, tags=("pst",))
         if ((cls in [Person, Program] and item.vip) or
             (cls == Training and d.programs[item.program].vip) or
             (cls == Session and d.programs[d.trainings[item.train[:4]].program].vip) or
@@ -138,9 +157,10 @@ def redraw(ws=[''], ext=False):
     total = []
     tree.delete(*tree.get_children())
     for o in dv(raw):
-        if (role=='su' or (not o.deleted and (cls!=Reserve or role=='inst' or o.user==acc))) and all(any((w in deac(value.lower())) if ext else deac(value.lower()).startswith(w) for value in ' '.join(map(str, o.see(d))).split()) for w in ws):
+        if (role=='su' or (not o.deleted and (cls!=Session or o.date>dt.datetime.now().date()) and (cls!=Reserve or (acc in {d.programs[d.trainings[o.session[:4]].program].coach, o.user} and d.sessions[o.session].date>dt.datetime.now().date())))) and all(any((w in deac(value.lower())) if ext else deac(value.lower()).startswith(w) for value in ' '.join(map(str, o.see(d))).split()) for w in ws):
             total.append(o.see(d) if not (cls==Reserve and role=='reg') else o.see(d)[:1]+o.see(d)[2:])
     total.sort(key=lambda x: x[0])
     for o in total:
         tree.insert("", "end", values=o)
     recolor()
+

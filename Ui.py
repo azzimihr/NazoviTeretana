@@ -1,6 +1,6 @@
 from Classes import *
 
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import tkinter as tk, ctypes as ct
 import sv_ttk, sys, unicodedata, time
 
@@ -93,6 +93,7 @@ def center(wind):
 
 def picker(root, session, d):
     session = session.split('  |  ')[0].removeprefix("⭐ ")
+    print(session)
     try:
         room = d.rooms[d.trainings[d.sessions[session].train[:4]].room]
     except:
@@ -127,3 +128,114 @@ def picker(root, session, d):
     pick.after(1, lambda: center(pick))
     pick.wait_window(pick)
     return result
+
+def export(fn, _tree):
+    rows = []
+    for i in _tree.get_children():
+        rows.append(_tree.item(i)["values"])
+
+    names = [_tree.heading(col)["text"] for col in _tree["columns"]]
+    wid = [len(str(h)) for h in names]
+    def present(r): return " | ".join(rp(str(cell)).ljust(wid[i]) for i, cell in enumerate(r))
+
+    for r in rows:
+        for i, cell in enumerate(r):
+            wid[i] = max(wid[i], len(rp(str(cell))))
+
+    with open(fn, "w", encoding="utf-8") as f:
+        f.write("\n".join([present(names), "-|-".join("-" * w for w in wid)] + [present(r) for r in rows]))
+
+def treewin(root, lists, col1, col2):
+    tw = tk.Toplevel(root)
+    tw.grab_set()
+    tw.transient(root)
+    tw.title('Izveštaji')
+    tw.config(bg='#161616')
+
+    Style('Treeview.Heading', font=("TkDefaultFont", 9, "normal"), fg="#cde", anchor="w", h=2)
+    Style('Custom.Treeview', bg="#222", rh=30, fg='#ddd', font=("TkDefaultFont", 9, "normal"), anchor="center").map('Custom.Treeview', foreground=[('selected', '#000')], background=[('selected', '#5bf')])
+
+    tree = ttk.Treeview(Frame(tw, pad=[10,10]), columns=('1','2'), show="headings", style='Custom.Treeview')
+    tree.pack(side='left', fill='both', expand=True)
+    tree.heading('1', text=col1)
+    tree.heading('2', text=col2)
+
+    for i in range(len(lists[0])):
+        tree.insert("", "end", values=(lists[0][i], lists[1][i]))
+
+    def exp():
+        if msg(tw,'Eksportovati izveštaj u fajl?', yn=1):
+            export('Izvestaj '+str(dt.datetime.now()).replace(':','-'), tree)
+    
+    Button(tw, '💾', exp, fg="#0f0", side='top', bg='#0f0')
+
+    tw.after(1, lambda: center(tw))
+    tw.wait_window(tw)
+
+
+def izvestaji(root,d):
+    raport = tk.Toplevel(root)
+    raport.grab_set()
+    raport.transient(root)
+    raport.title('Izveštaji')
+    raport.config(bg='#161616')
+
+    def totaldays(d):
+        days = [0,0,0,0,0,0,0]
+        for r in dv(d.reserves):
+            days[d.sessions[r.session].date.weekday()] += 1
+        print(days)
+        return days
+
+    def i1(d):
+        treewin(raport, [dani(), totaldays(d)], "Dan u nedelji", "Broj održavanja")
+
+    def i2(d):
+        insts = []
+        times = []
+        for p in dv(d.persons):
+            if p.role=='inst':
+                insts.append(p.username)
+                times.append(0)
+        for r in dv(d.reserves):
+            s = d.sessions[r.session]
+            if s.date<now() and s.date>now() - dt.deltatime(days=30):
+                times[insts.index(d.programs[d.trainings[s.train[:4]].program].coach)] += 1
+        s1, s2 = zip(*sorted(zip(insts, times), reverse=True))
+        treewin(raport, [s1,s2], "Instruktor", "Broj rezervacija")
+
+    def i3(d):
+        pak = ['Običan','VIP']
+        times = [0, 0]
+        for r in dv(d.reserves):
+            s = d.sessions[r.session]
+            if s.date<now() and s.date>now() - dt.deltatime(days=30):
+                times[d.programs[d.trainings[s.train[:4]].program].vip] += 1
+        treewin(raport, [pak,times], "Paket", "Broj rezervacija")
+    
+    def i4(d):
+        progs = []
+        times = []
+        for p in dv(d.programs):
+            progs.append(p.name)
+            times.append(0)
+        for r in dv(d.reserves):
+            s = d.sessions[r.session]
+            if s.date<now() and s.date>now() - dt.deltatime(days=365):
+                times[progs.index(d.programs[d.trainings[s.train[:4]].program].name)] += 1
+        s1, s2 = zip(*sorted(zip(progs, times), reverse=True))
+        treewin(raport, [s1,s2], "Program", "Broj rezervacija")
+
+    def i5(d):
+        return max(zip(totaldays(d), dani()))[1]
+
+    b1 = Button(Frame(raport, pad=[20,0]),'REZERVACIJE PREMA DANU U NEDELJI',lambda: i1(d))
+    b1 = Button(Frame(raport, pad=[20,0]),'REZERVACIJE PREMA INSTRUKTORIMA (30 DANA)',lambda: i2(d))
+    b2 = Button(Frame(raport, pad=[20,0]),'REZERVACIJE PREMA PAKETU (30 DANA)',lambda: i3(d))
+    b3 = Button(Frame(raport, pad=[20,0]),'NAJPOPULARNIJI PROGRAMI (1 GOD.)',lambda: i4(d))
+    
+    Label(Frame(raport, pad=[20,10]),f"Najpopularniji dan u nedelji je: {i5(d)}").pack(padx=25, pady=0)
+    Button(raport, '🛈', lambda: msg(raport, "Izveštaji A, B i C je\nse mogu dobiti eksportom\niz glavnih tabela."), fg="#00f", side='top', bg='#00f')
+
+    raport.after(1, lambda: center(raport))
+    raport.wait_window(raport)
